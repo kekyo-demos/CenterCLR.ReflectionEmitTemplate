@@ -6,12 +6,12 @@ using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ReflectionEmitTemplate
+namespace CenterCLR.ReflectionEmitTemplate
 {
 	/// <summary>
 	/// コードをILで動的に生成するヘルパークラスです。
 	/// </summary>
-	internal sealed class Emitter
+	internal sealed class Emitter : IDisposable
 	{
 		private readonly AssemblyBuilder assemblyBuilder_;
 		private readonly ModuleBuilder moduleBuilder_;
@@ -23,10 +23,27 @@ namespace ReflectionEmitTemplate
 		public Emitter(string name)
 		{
 			var assemblyName = new AssemblyName(name);
-			assemblyBuilder_ = AppDomain.CurrentDomain.DefineDynamicAssembly(
+#if NET45
+			assemblyBuilder_ = AssemblyBuilder.DefineDynamicAssembly(
 				assemblyName,
 				AssemblyBuilderAccess.RunAndSave);
+#else
+			assemblyBuilder_ = AssemblyBuilder.DefineDynamicAssembly(
+				assemblyName,
+				AssemblyBuilderAccess.Run);
+#endif
 			moduleBuilder_ = assemblyBuilder_.DefineDynamicModule(name + ".dll");
+		}
+
+		/// <summary>
+		/// Disposeメソッドです。
+		/// </summary>
+		public void Dispose()
+		{
+#if NET45
+			// デバッグ用に出力
+			assemblyBuilder_.Save(moduleBuilder_.ScopeName);
+#endif
 		}
 
 		/// <summary>
@@ -64,16 +81,16 @@ namespace ReflectionEmitTemplate
 			emitter(ilGenerator);
 
 			// 定義を完了して型を得る
-			var type = typeBuilder.CreateType();
+			var typeInfo = typeBuilder.CreateTypeInfo();
+			var type = typeInfo.AsType();
 
 			// メソッドを取得する
 			var bindingFlags = BindingFlags.Public | BindingFlags.Static;
 			var method = type.GetMethod(methodName, bindingFlags);
 
 			// デリゲートを生成する
-			return (Func<TArgument, TReturn>) Delegate.CreateDelegate(
-				typeof (Func<TArgument, TReturn>),
-				method);
+			return (Func<TArgument, TReturn>)method.CreateDelegate(
+				typeof(Func<TArgument, TReturn>));
 		}
 	}
 
@@ -82,23 +99,24 @@ namespace ReflectionEmitTemplate
 		public static void Main(string[] args)
 		{
 			// 動的アセンブリを生成
-			var emitter = new Emitter("TestAssembly");
+			using (var emitter = new Emitter("TestAssembly"))
+			{
+				// メソッドを動的に生成
+				var func = emitter.EmitMethod<int, string>(
+					"TestNamespace.TestType",
+					"TestMethod",
+					ilGenerator =>
+					{
+						ilGenerator.Emit(OpCodes.Ldstr, "Hello IL coder!");
+						ilGenerator.Emit(OpCodes.Ret);
+					});
 
-			// メソッドを動的に生成
-			var func = emitter.EmitMethod<int, string>(
-				"TestType",
-				"TestMethod",
-				ilGenerator =>
-				{
-					ilGenerator.Emit(OpCodes.Ldstr, "Hello IL coder!");
-					ilGenerator.Emit(OpCodes.Ret);
-				});
+				// 実行
+				var result = func(123);
 
-			// 実行
-			var result = func(123);
-
-			// 結果
-			Console.WriteLine(result);
+				// 結果
+				Console.WriteLine(result);
+			}
 		}
 	}
 }
