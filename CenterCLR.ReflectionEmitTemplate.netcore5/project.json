@@ -1,0 +1,16 @@
+﻿{
+    "version": "1.0.0-*",
+    "compilationOptions": {
+        "emitEntryPoint": true
+    },
+
+    "dependencies": {
+        "NETStandard.Library": "1.0.0-rc2-23616",
+        "System.Reflection.Emit": "4.0.1-rc2-23616",
+        "System.Reflection.Emit.ILGeneration": "4.0.1-rc2-23616"
+    },
+
+    "frameworks": {
+        "netcore5": { }
+    }
+}
